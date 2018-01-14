@@ -1,36 +1,38 @@
 # Info
 
 
-Lucene has an implementation of InetAddressPoint field type (within its misc section, within lucene-misc library)
-This is a POC for a InetAddressType implementation in solr which would make use of this
+Lucene has an implementation of InetAddressPoint field type (within its misc section, within lucene-misc library).
+This project was meant as a POC for a InetAddressType implementation in solr which would make use of it.
 
-It is not intended in any means to be a complete implementation (although it seems to work pretty wel)
+It is not intended in any means to be a complete implementation (although it seems to work pretty well)
 
 What is missing, so far:
-- performance and stress testing
-- automated unit and integration tests
+- No unit and integration tests
+- Not tested for performance
 - To be tested with SolrCloud (although it should work)
+- a lot of debugging code.
 
 But, other than that, it does quite a good job.
 A field can be indexed, stored or generate docValues (i.e. stored="true" indexed="true" docValues="true")
 
-- You can sort by IP Address: sort=src_address asc)
-- You can do range queries: q=src_address:\[192.168.1.1 TO 192.168.1.255\]
-- You can do set based faceting: 
-
-```
-curl http://localhost:8983/solr/ipaddress/select -d 'q=*:*' -d 'sort=src_address asc' -d'facet=true' -d 'facet.interval=src_address' -d 'facet.interval.set=[192.168.1.0,192.168.1.255]' -d 'facet.interval.set=[192.168.2.0,192.168.2.255]' -d 'rows=0'
-```
-
+- You can sort by IP Address: sort=src_address asc
+- You can do range queries: q=src\_address:\[192.168.1.1 TO 192.168.1.255\]
+- You can do interval based faceting: http://localhost:8983/solr/ipaddress/select?facet=on&q=\*:\*&rows=0&facet.interval=src_address&facet.interval.set=\[192.168.1.1,192.168.1.255\]&facet.interval.set=\[192.168.2.1,192.168.2.255\]
 
 There is no way to do range-based faceting. That is due to how solr and range faceting is currently implemented, 
 
 This field Type has been tested on solr 7.1.0
-It should work on solr 6.6.0. But so far this has not been tested;
+It should work on previous versions also. But has not been tested yet;
 
 # Usage
+### build jar
+The project is a standard maven project:
 
-## InetAddressType field type
+```
+mvn clean package
+```
+
+The above command should create a file named solr-inetaddress.jar within target directory of the project
 
 ### add jar
 Add the jar to the classpath
@@ -44,6 +46,9 @@ e.g. (solrconfig.xml):
 ```
 
 Or, create a lib directory within your instanceDir and copy the jar file there
+
+The jar depends on lucene-misc-<version>.jar (where the InetAddressPoint class resides). This file should be already present within solr libraries
+
  
 ### Add fieldType and fields
 Add some fieldTypes of class h42.precchia.InetAddressType to solr.
@@ -89,4 +94,4 @@ create_fields.json:
   "docValues":true
 }
 ```
-
+You now have fields src\_address and dest\_address of type ip_address (both IPV4 and IPV6).

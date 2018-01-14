@@ -57,8 +57,8 @@
   </build>
 
   <scm>
-    <connection>scm:git:https://github.com/grossws/solr-dvtf.git</connection>
-    <developerConnection>scm:git:ssh://git@github.com/grossws/solr-dvtf.git</developerConnection>
+    <connection>scm:git:https://github.com/precchia/solr_InetAddressType</connection>
+    <developerConnection>scm:git:https://github.com/precchia/solr_InetAddressType</developerConnection>
     <tag>master</tag>
   </scm>
 
