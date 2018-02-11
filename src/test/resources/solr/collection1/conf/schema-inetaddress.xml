@@ -48,7 +48,7 @@
   <fieldType name="string" class="solr.StrField" sortMissingLast="true" docValues="true"/>
   <fieldType name="strings" class="solr.StrField" sortMissingLast="true" docValues="true" multiValued="true"/>
 
-  <fieldType name="ip_address" class="solr.InetAddressType" docValues="true" indexed="true" stored="true" />    
+  <fieldType name="ip_address" class="h42.precchia.InetAddressType" docValues="true" indexed="true" stored="true" />    
  </types>
 
  <fields>
