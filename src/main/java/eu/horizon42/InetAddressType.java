@@ -1,4 +1,4 @@
-package h42.precchia;
+package eu.horizon42;
 
 import java.io.IOException;
 import java.lang.invoke.MethodHandles;
@@ -75,7 +75,7 @@ public class InetAddressType extends PointField {
 		 
 		// stored?
 		if (sf.stored()) {
-			fields.add(getStoredField(sf, value));
+			fields.add(getStoredField(sf, nativeValue));
 		}
 
 		// indexed?
@@ -115,14 +115,16 @@ public class InetAddressType extends PointField {
         	return new SortedDocValuesField(sf.getName(), bf);
         }
 	}
+
 	/* (non-Javadoc)
-	 * storedField is an intrnal method called by createFields for creating the indexed field 
+	 * storedField is an internal method called by createFields for creating the indexed field 
+	 * 
+	 * We store the bytes[] corresponding to the InetAddress
 	 */
-	// How do we create a storedField? If value is a string, we just store the string.
-	// If it's a InetAddress how do e convert back?
 	protected StoredField getStoredField(SchemaField sf, Object value) {
-		log.trace("getStoredValue:" + value);
-		return new StoredField(sf.getName(), value.toString());
+		log.trace("getStoredField:" + value);
+		InetAddress val = (InetAddress)toNativeType(value);
+		return new StoredField(sf.getName(), InetAddressPoint.encode(((InetAddress)val)));
 	}
 
     /* (non-Javadoc)
@@ -161,7 +163,7 @@ public class InetAddressType extends PointField {
 	 * Called to write back value
 	 */
 	public void write(TextResponseWriter writer, String name, IndexableField f) throws IOException {
-		writer.writeStr(name, f.stringValue(), true);
+		writer.writeStr(name, InetAddressPoint.decode(f.binaryValue().bytes).getHostAddress(), true);
 	}
 
 	// **********************************************************************************
@@ -219,7 +221,15 @@ public class InetAddressType extends PointField {
 
 		/* (non-Javadoc)
 		 * @see org.apache.solr.schema.FieldType#toExternal(org.apache.lucene.index.IndexableField)
-		 * This will be called to render the docValues field. Because we have set it as SORTED_SET.
+		 */
+		@Override
+		public String toExternal(IndexableField f) {
+			return InetAddressPoint.decode(f.binaryValue().bytes).getHostAddress();
+		}
+
+		/* (non-Javadoc)
+		 * @see org.apache.solr.schema.FieldType#toObject(org.apache.solr.schema.SchemaField, org.apache.lucene.util.BytesRef)
+		 * This SHOULD be called to render the docValues field.
 		 * Call sequence:
 		 * org.apache.solr.search.SolrDocumentFetcher.decorateDocValueFields -->
 		 *   --> toObject(SchemaField,Object) (within FieldType)
@@ -230,8 +240,21 @@ public class InetAddressType extends PointField {
 		 *       --> toExternal(IndexableField)
 		 */
 		@Override
-		public String toExternal(IndexableField f) {
-			return InetAddressPoint.decode(f.binaryValue().bytes).getHostAddress();
+		public Object toObject(SchemaField sf, BytesRef term) {
+			InetAddress inet =InetAddressPoint.decode(term.bytes);
+			log.trace("toObject " + sf + "; " + term + " = " + inet, new Throwable());
+			return inet;
+		}
+
+		/*
+		 * (non-Javadoc)
+		 * @see org.apache.solr.schema.FieldType#toObject(org.apache.lucene.index.IndexableField)
+		 */
+		@Override
+		public Object toObject(IndexableField f) {
+			InetAddress inet = InetAddressPoint.decode(f.binaryValue().bytes);
+			log.trace("toObject " + f + " = " + inet);
+			return inet;
 		}
 
 	// **********************************************************************************
@@ -358,16 +381,4 @@ public class InetAddressType extends PointField {
 		// TODO What should we return ?
 		return null;
 	}
-
-	/* (non-Javadoc)
-	 * @see org.apache.solr.schema.FieldType#toObject(org.apache.solr.schema.SchemaField, org.apache.lucene.util.BytesRef)
-	 */
-	@Override
-	public Object toObject(SchemaField sf, BytesRef term) {
-		Object obj = super.toObject(sf, term); 
-		// TODO Auto-generated method stub
-		log.trace("toObject " + sf + "; " + term + " = " + obj, new Throwable());
-		return obj;
-	}
-
 }
