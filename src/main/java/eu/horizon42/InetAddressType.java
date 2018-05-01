@@ -34,6 +34,13 @@ import org.apache.lucene.document.StoredField;
 
 /**
  * InetAddressType PointField
+ * Additional arguments (in addition to common ones: docValues, store, indexed, multiValue):
+ * storedDocValue: "binary" or "string"
+ *   default: "string"
+ *   When docValues="true", instruct solr on how to store the field as docValues:
+ *     - "binary": will store a binary representation. Sorting will work as expected; but the field cannot be rendred afterwards
+ *     - "string": it will be possible to retrieve the fineld's docValues. But sorting will be based on string representation:
+ *       192.168.1.10 will come before 192.168.1.2
  */
 
 public class InetAddressType extends PointField {

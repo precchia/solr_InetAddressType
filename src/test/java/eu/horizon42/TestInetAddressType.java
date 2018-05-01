@@ -14,34 +14,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package h42.precchia;
+package eu.horizon42;
 
-import java.io.IOException;
-import java.math.BigDecimal;
-import java.math.BigInteger;
-import java.math.RoundingMode;
 import java.net.InetAddress;
-import java.text.SimpleDateFormat;
-import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.Comparator;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Set;
-import java.util.SortedSet;
-import java.util.TreeSet;
-import java.util.function.Supplier;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.DoublePoint;
@@ -67,6 +47,7 @@ import org.apache.solr.common.params.CommonParams;
 import org.apache.solr.index.SlowCompositeReaderWrapper;
 import org.apache.solr.request.SolrQueryRequest;
 import org.apache.solr.schema.PointField;
+import org.apache.solr.schema.IndexSchema;
 import org.apache.solr.schema.IndexSchema.DynamicField;
 import org.apache.solr.search.SolrIndexSearcher;
 import org.apache.solr.search.SolrQueryParser;
@@ -92,9 +73,53 @@ public class TestInetAddressType extends SolrTestCaseJ4 {
       "_sml", "_dv_sml", "_mv_sml", "_mv_dv_sml", "_ni_dv_sml", "_ni_mv_dv_sml"
   };
 
+  @SuppressWarnings("unchecked")
   @BeforeClass
   public static void beforeClass() throws Exception {
-    initCore("solrconfig.xml","schema-inetaddress.xml");
+    // This testing approach means no schema file or per-test temp solr-home!
+    System.setProperty("managed.schema.mutable", "true");
+    System.setProperty("managed.schema.resourceName", "schema-inetaddress.xml");
+    //System.setProperty("enable.update.log", "false");
+    //System.setProperty("documentCache.enabled", "true");
+    //System.setProperty("enableLazyFieldLoading", "true");
+
+    initCore("solrconfig-managed-schema.xml", "ignoredSchemaName");
+
+    // TODO SOLR-10229 will make this easier
+    boolean PERSIST_FALSE = false; // don't write to test resource dir
+    IndexSchema schema = h.getCore().getLatestSchema();
+    schema = schema.addFieldTypes(
+    		Arrays.asList(
+    				schema.newFieldType("ip_address_str", "eu.horizon42.InetAddressType",map(
+    						"name", "ip_address_str",
+    						"class","eu.horizon42.InetAddressType",
+    						"docValues", "true",
+    						"indexed", "true",
+    						"stored", "true",
+    						"multiValued", "false"
+    						// "storedDocValue", "string" // string by default
+						)),
+    				schema.newFieldType("ip_address_bin", "eu.horizon42.InetAddressType",map(
+    						"name", "ip_address_bin",
+    						"class","eu.horizon42.InetAddressType",
+    						"docValues", "true",
+    						"indexed", "true",
+    						"stored", "true",
+    						"multiValued", "false",
+    						"storedDocValue", "binary"
+						))
+			),PERSIST_FALSE);
+    
+    schema = schema.addFields(
+    		Arrays.asList(
+    				schema.newField("ip_address_str", "ip_address_str", map()),
+    				schema.newField("ip_address_bin", "ip_address_bin", map())
+			),
+    		Collections.emptyMap(),
+    		PERSIST_FALSE);
+
+    h.getCore().setLatestSchema(schema);
+    //initCore("solrconfig.xml","schema-inetaddress.xml");
   }
   
   @Override
@@ -106,10 +131,13 @@ public class TestInetAddressType extends SolrTestCaseJ4 {
   }
   
   @Test
-  public void testIntPointFieldExactQuery() throws Exception {
-  	String field = new String("single_ip_address");
-    assertTrue(h.getCore().getLatestSchema().getField(field).hasDocValues());
-    assertTrue(h.getCore().getLatestSchema().getField(field).getType() instanceof PointField);
+  public void testInetAddressExactQuery() throws Exception {
+  	String field_str = new String("ip_address_str");
+  	String field_bin = new String("ip_address_bin");
+    assertTrue(h.getCore().getLatestSchema().getField(field_str).hasDocValues());
+    assertTrue(h.getCore().getLatestSchema().getField(field_str).getType() instanceof PointField);
+    assertTrue(h.getCore().getLatestSchema().getField(field_bin).hasDocValues());
+    assertTrue(h.getCore().getLatestSchema().getField(field_bin).getType() instanceof PointField);
 
     ArrayList<InetAddress> addrs = new ArrayList<InetAddress>();
 	    for (int i = 1; i <= 10; i++) {
@@ -118,78 +146,48 @@ public class TestInetAddressType extends SolrTestCaseJ4 {
 	      }
     for (int idx=0; idx < addrs.size(); idx++) {
 		String ipaddress = addrs.get(idx).getHostAddress();
-		String docs = adoc("id", String.valueOf(idx), field, ipaddress);
-		System.out.println("ADD_DOC: " + docs);
+		String docs = adoc("id", String.valueOf(idx), field_str, ipaddress, field_bin, ipaddress);
     	assertU("Inserting document id " + Integer.toString(idx), docs);
     }
     assertU("commit",commit());
     
-    String function = "field(" + field + ", min)";
-    {
-    	SolrQueryRequest query = req("q", "*:*", "fl", "id");
+    String function = "field(" + field_str + ",min)";
+    // We cannot render (fl=) a field with binary docValues. use string docValues instead
+    try {
+    	SolrQueryRequest query = req("q", "*:*", "fl", "id," + field_str);
         System.out.println("QUERY1:" + query);
-        System.out.println("RESPONSE:" + h.query(query));
-        assertQ("numFound", query, 
-                "//*[@numFound='10']");
-    }
-    {
-    	SolrQueryRequest query = req("q", "*:*", "sort", field + " desc");
-        System.out.println("QUERY2:" + query);
-        System.out.println("RESPONSE:" + h.query(query));
-        assertQ("numFound", query, 
-                "//*[@numFound='10']");
-    }
-    // Why does this fail?
-    {
-    	SolrQueryRequest query = req("q", "*:*", "fl", "id," + field, "sort", field + " desc");
-        System.out.println("QUERY2:" + query);
         //System.out.println("RESPONSE:" + h.query(query));
         assertQ("numFound", query, 
                 "//*[@numFound='10']");
     }
-    /*
-            "//result/doc[1]/str[@name='id'][.='9']",
-            "//result/doc[2]/str[@name='id'][.='8']",
-            "//result/doc[3]/str[@name='id'][.='7']",
-            "//result/doc[10]/str[@name='id'][.='0']",
-            "//result/doc[1]/str[@name='single_ip_address'][.='192.168.1.10']"
-    		);
-     */
-  }
-  
-  private void doTestPointMultiValuedFunctionQuery(String nonDocValuesField, String docValuesField, String type, String[] numbers) throws Exception {
-    assertTrue(h.getCore().getLatestSchema().getField(docValuesField).hasDocValues());
-    assertTrue(h.getCore().getLatestSchema().getField(docValuesField).multiValued());
-    assertTrue(h.getCore().getLatestSchema().getField(docValuesField).getType() instanceof PointField);
-    String function = "field(" + docValuesField + ", min)";
-    
-    assertQ(req("q", "*:*", "fl", "id, " + docValuesField, "sort", function + " desc"), 
-        "//*[@numFound='10']",
-        "//result/doc[1]/str[@name='id'][.='9']",
-        "//result/doc[2]/str[@name='id'][.='8']",
-        "//result/doc[3]/str[@name='id'][.='7']",
-        "//result/doc[10]/str[@name='id'][.='0']");
-
-    assertFalse(h.getCore().getLatestSchema().getField(nonDocValuesField).hasDocValues());
-    assertTrue(h.getCore().getLatestSchema().getField(nonDocValuesField).multiValued());
-    assertTrue(h.getCore().getLatestSchema().getField(nonDocValuesField).getType() instanceof PointField);
-
-    function = "field(" + nonDocValuesField + ",min)";
-    
-    assertQEx("Expecting Exception",
-        "sort param could not be parsed as a query", 
-        req("q", "*:*", "fl", "id", "sort", function + " desc"), 
-        SolrException.ErrorCode.BAD_REQUEST);
-    
-    assertQEx("Expecting Exception", 
-        "docValues='true' is required to select 'min' value from multivalued field (" + nonDocValuesField + ") at query time", 
-        req("q", "*:*", "fl", "id, " + function), 
-        SolrException.ErrorCode.BAD_REQUEST);
-    
-    function = "field(" + docValuesField + ",foo)";
-    assertQEx("Expecting Exception", 
-        "Multi-Valued field selector 'foo' not supported", 
-        req("q", "*:*", "fl", "id, " + function), 
-        SolrException.ErrorCode.BAD_REQUEST);
+    catch (AssertionError ex) {
+      System.out.println("got a AssertionError somewhere:" + ex);
+      ex.printStackTrace();
+      throw(ex);
+    }
+    // If we sort using binary docValues, order will be correct: 192.168.1.10 comes last
+    {
+    	SolrQueryRequest query = req("q", "*:*", "fl", "id," + field_str, "sort", field_bin + " asc");
+        System.out.println("QUERY2:" + query);
+        //System.out.println("RESPONSE:" + h.query(query));
+        assertQ("numFound", query, 
+                "//*[@numFound='10']",
+                "//result/doc[1]/str[@name='ip_address_str'][.='192.168.1.1']",
+                "//result/doc[2]/str[@name='ip_address_str'][.='192.168.1.2']",
+                "//result/doc[10]/str[@name='ip_address_str'][.='192.168.1.10']"
+        		);
+    }
+    // If we sort using string docValues, order will be incorrect: 192.168.1.10 comes before 192.168.1.2
+    {
+    	SolrQueryRequest query = req("q", "*:*", "fl", "id," + field_str, "sort", field_str + " asc");
+        System.out.println("QUERY2:" + query);
+        System.out.println("RESPONSE:" + h.query(query));
+        assertQ("numFound", query, 
+                "//*[@numFound='10']",
+                "//result/doc[1]/str[@name='ip_address_str'][.='192.168.1.1']",
+                "//result/doc[2]/str[@name='ip_address_str'][.='192.168.1.10']",
+                "//result/doc[3]/str[@name='ip_address_str'][.='192.168.1.2']"
+        		);
+    }
   }
 }

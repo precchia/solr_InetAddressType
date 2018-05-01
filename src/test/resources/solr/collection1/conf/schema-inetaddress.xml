@@ -48,13 +48,17 @@
   <fieldType name="string" class="solr.StrField" sortMissingLast="true" docValues="true"/>
   <fieldType name="strings" class="solr.StrField" sortMissingLast="true" docValues="true" multiValued="true"/>
 
-  <fieldType name="ip_address" class="h42.precchia.InetAddressType" docValues="true" indexed="true" stored="true" />    
- </types>
+  <!--  
+  <fieldType name="ip_address" class="eu.horizon42.InetAddressType" docValues="true" indexed="true" stored="true" multiValued="false"/>    
+  -->
+  </types>
 
  <fields>
    <field name="id" type="string"/>
    <field name="_version_" type="plong" indexed="true" stored="true" docValues="true"/>
+  <!--  
    <field name="single_ip_address" type="ip_address"/>
+  -->
  </fields>
 
  <uniqueKey>id</uniqueKey>
