@@ -36,18 +36,14 @@ import org.apache.lucene.document.StoredField;
  * InetAddressType PointField
  */
 
-// Why inheriting from PrimitiveType:
-// an InetAddress field type is kind of a NumericFieldType. But NumericType can only be integer, float, long, double, date
-// PrimitiveFieldType is a thin subclass level above FieldType, which sets omitnorms to true
-// PointField is a NumericFieldType but on top will implement toInternalBytesRef instead of toInternal
-
 public class InetAddressType extends PointField {
 	private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
 	/* (non-Javadoc)
 	 * @see org.apache.solr.schema.PrimitiveFieldType#init(org.apache.solr.schema.IndexSchema, java.util.Map)
+	 * 
+	 * TODO: Verify if args to be accepted need to be personalized
 	 */
-	// We probably would need to override this to personalize params we accept
 	@Override
 	protected void init(IndexSchema schema, Map<String, String> args) {
 	    log.debug("init:" + schema + "; args:" + args);
@@ -56,8 +52,10 @@ public class InetAddressType extends PointField {
 
 	/* (non-Javadoc)
 	 * @see org.apache.solr.schema.FieldType#createFields(org.apache.solr.schema.SchemaField, java.lang.Object)
-	 * This class needs to be overriden if you want to handle stored AND indexed fields together
-	 * createFields is the method that will return the several fields (indexed, docValue, stored) from one entry
+	 * Creates fields for input value:
+	 *   - stored (if stored=true)
+	 *   - docValues (if docValues=true)
+	 *   - Indexed (if Indexed=true)
 	 */
 	@Override
 	public List<IndexableField> createFields(SchemaField sf, Object value) {
@@ -90,6 +88,13 @@ public class InetAddressType extends PointField {
 		return fields;
 	}
 	/*
+	 * returns the docValues field for InetAddressType.
+	 * docValus will be Of type:
+	 *  - SORTED_SET if field is multiValued
+	 *  - SORTED if field is not multivalued
+	 *  - docValue will contain bytesRef for InetAddress representation.
+	 *  The BytesRef will be translated back into an InetAddress by toObject(SchemaField,BytesRef)
+	 *  
 	 * NOTE: If we have both stored and docValues, RetrieveFieldsOptimizer class
 	 * (@see org.apache.solr.response.RetrieveFieldsOptimizer)
 	 * will use docValues as stored values, as an optimization.
@@ -100,11 +105,8 @@ public class InetAddressType extends PointField {
 	 *     SolrDocumentFetcher
 	 *     
 	 * Within SolrDocumentFetcher the method decorateDocValueFields is responsible for rendering a docValues field.
-	 * Unfortunately, the only field which has a rendering managd by the FieldType is SORTED_SET.
-	 * All the others are either converted withine SolrDocumentFetcher or returned as is (which is a BytesRef)
-	 * Because of this, we need to return a SORTED_SET
-	 * 
-	 * There must be a cleverer way to do it.
+	 * Unfortunately, the only field which (currently) has a rendering managed by the FieldType is SORTED_SET.
+	 * All the others are either converted within SolrDocumentFetcher or returned as is (which is a BytesRef)
 	 */
 	
 	private Field getDocValuesField(SchemaField sf, InetAddress nativeValue) {
@@ -117,9 +119,10 @@ public class InetAddressType extends PointField {
 	}
 
 	/* (non-Javadoc)
-	 * storedField is an internal method called by createFields for creating the indexed field 
+	 * storedField is an internal method defined within PointType for creating the indexed field
+	 * It is called by createFields 
 	 * 
-	 * We store the bytes[] corresponding to the InetAddress
+	 * We create a StoredField with the bytes[] corresponding to the InetAddress
 	 */
 	protected StoredField getStoredField(SchemaField sf, Object value) {
 		log.trace("getStoredField:" + value);
@@ -128,9 +131,8 @@ public class InetAddressType extends PointField {
 	}
 
     /* (non-Javadoc)
-	 * @see org.apache.solr.schema.FieldType#createField(org.apache.solr.schema.SchemaField, java.lang.Object, float)
-	 * createField is called by createFields to create the corresponding indexe field
-	 * We override it to return InetAddressPoint corresponding to the value
+	 * @see org.apache.solr.schema.FieldType#createField(org.apache.solr.schema.SchemaField, java.lang.Object)
+	 * creates a field of type InetAddressPoint corresponding to the value
 	 */
 	@Override
 	public IndexableField createField(SchemaField sf, Object value) {
@@ -143,16 +145,13 @@ public class InetAddressType extends PointField {
 	/* (non-Javadoc)
 	 * @see org.apache.solr.schema.FieldType#getUninversionType(org.apache.solr.schema.SchemaField)
 	 * This is basically the type we return as docValues Type
-	 * Only exception: for non multivalued fields we need to return a SortedSetDocValuesField type.
-	 * In order to trigger conversion BytesRef -> String when rendering.
-	 * However, it should be a BinaryDocValues.
 	 */
 	  @Override
 	  public Type getUninversionType(SchemaField sf) {
 	    if (sf.multiValued()) {
-	      return Type.SORTED;
+	      return Type.SORTED_SET_BINARY;
 	    } else {
-	      return Type.BINARY;
+	      return Type.SORTED;
 	    }
 	  }
 	
@@ -160,7 +159,7 @@ public class InetAddressType extends PointField {
 	/*
 	 * (non-Javadoc)
 	 * @see org.apache.solr.schema.FieldType#write(org.apache.solr.response.TextResponseWriter, java.lang.String, org.apache.lucene.index.IndexableField)
-	 * Called to write back value
+	 * Called to write back value for stored field. Value is the StoredField with bytes[] corresponding to the InetAddress.
 	 */
 	public void write(TextResponseWriter writer, String name, IndexableField f) throws IOException {
 		writer.writeStr(name, InetAddressPoint.decode(f.binaryValue().bytes).getHostAddress(), true);
@@ -168,7 +167,6 @@ public class InetAddressType extends PointField {
 
 	// **********************************************************************************
 	// Conversion functions
-
 	// **********************************************************************************
 	/* (non-Javadoc)
 	 * @see org.apache.solr.schema.FieldType#toNativeType(java.lang.Object)
@@ -197,7 +195,7 @@ public class InetAddressType extends PointField {
 	 */
 	@Override
 	protected String indexedToReadable(BytesRef indexedForm) {
-		log.debug("indexedToReadable: " + indexedForm);
+		log.trace("indexedToReadable: " + indexedForm);
 		try {
 			InetAddress inet = InetAddress.getByAddress(indexedForm.bytes);
 			return inet.getHostAddress();
@@ -209,10 +207,11 @@ public class InetAddressType extends PointField {
 	/*
 	 * (non-Javadoc)
 	 * @see org.apache.solr.schema.FieldType#readableToIndexed(java.lang.CharSequence, org.apache.lucene.util.BytesRefBuilder)
-	 * You will need to override this because the default implementation uses tointernal, which generated an error within a PointField
+	 * default implementation uses toInternal, which generates an error within a PointField
 	 */
 	  @Override
 	  public void readableToIndexed(CharSequence val, BytesRefBuilder result) {
+		log.trace("readableToIndexed: " + val);
 		  result.grow(InetAddressPoint.BYTES);
 		  result.setLength(InetAddressPoint.BYTES);
 		  InetAddress inet = (InetAddress)toNativeType(val);
@@ -366,14 +365,15 @@ public class InetAddressType extends PointField {
 	        public FieldComparator.TermOrdValComparator newComparator
 	            (final String fieldname, final int numHits, final int sortPos, final boolean reversed) {
 	          return new FieldComparator.TermOrdValComparator(numHits, fieldname);
-	        }}, reverse);
+	        }
+	      }, reverse);
 	    }
 	  }
 
 	// **********************************************************************************
 	// Stubs there to see IF they get called at any point and if we need to override them
 	// **********************************************************************************
-	
+	// TODO: Note: still unclear what getSingleValueSource should return. Unclear as what getValueSource should return at all...
 	@Override
 	protected ValueSource getSingleValueSource(org.apache.lucene.search.SortedNumericSelector.Type choice,
 			SchemaField field) {
