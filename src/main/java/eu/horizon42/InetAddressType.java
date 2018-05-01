@@ -37,6 +37,11 @@ import org.apache.lucene.document.StoredField;
  */
 
 public class InetAddressType extends PointField {
+	enum dvTypeEnum {
+		BINARY,
+		STRING
+	}
+	dvTypeEnum dvType;
 	private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
 	/* (non-Javadoc)
@@ -48,6 +53,16 @@ public class InetAddressType extends PointField {
 	protected void init(IndexSchema schema, Map<String, String> args) {
 	    log.debug("init:" + schema + "; args:" + args);
 		super.init(schema, args);
+		String p = args.remove("storedDocValue");
+    	// By default, store ad Binary
+    	dvType = dvTypeEnum.STRING;
+	    if (p != null) {
+	    	if ("binary".equals(p)) {
+		    	dvType = dvTypeEnum.BINARY;
+	    	} else if ("string".equals(p)) {
+		    	dvType = dvTypeEnum.STRING;
+	    	}
+	    }
 	}
 
 	/* (non-Javadoc)
@@ -110,11 +125,17 @@ public class InetAddressType extends PointField {
 	 */
 	
 	private Field getDocValuesField(SchemaField sf, InetAddress nativeValue) {
-		BytesRef bf = new BytesRef(InetAddressPoint.encode(nativeValue));
+		BytesRef bf;
+		if (dvType == dvTypeEnum.BINARY) {
+			bf = new BytesRef(InetAddressPoint.encode(nativeValue));
+			
+		} else {
+			bf = new BytesRef(nativeValue.getHostAddress());
+		}
         if (!sf.multiValued()) {
-	        return new SortedSetDocValuesField(sf.getName(), bf);
-        } else {
         	return new SortedDocValuesField(sf.getName(), bf);
+        } else {
+	        return new SortedSetDocValuesField(sf.getName(), bf);
         }
 	}
 
