@@ -1,4 +1,4 @@
-package eu.horizon42;
+package org.apache.solr.schema;
 
 import java.io.IOException;
 import java.lang.invoke.MethodHandles;

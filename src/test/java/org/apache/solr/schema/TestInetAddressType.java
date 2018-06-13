@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package eu.horizon42;
+package org.apache.solr.schema;
 
 import java.net.InetAddress;
 import java.time.LocalDateTime;
@@ -84,7 +84,7 @@ public class TestInetAddressType extends SolrTestCaseJ4 {
 				Arrays.asList(
 						schema.newFieldType("ip_address_str", "eu.horizon42.InetAddressType",map(
 								"name", "ip_address_str",
-								"class","eu.horizon42.InetAddressType",
+								"class","solr.InetAddressType",
 								"docValues", "true",
 								"indexed", "true",
 								"stored", "true",
@@ -93,7 +93,7 @@ public class TestInetAddressType extends SolrTestCaseJ4 {
 								)),
 						schema.newFieldType("ip_address_bin", "eu.horizon42.InetAddressType",map(
 								"name", "ip_address_bin",
-								"class","eu.horizon42.InetAddressType",
+								"class","solr.InetAddressType",
 								"docValues", "true",
 								"indexed", "true",
 								"stored", "true",
