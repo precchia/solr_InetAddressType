@@ -62,132 +62,153 @@ import com.google.common.collect.ImmutableMap;
 /** Tests for PointField functionality */
 public class TestInetAddressType extends SolrTestCaseJ4 {
 
-  // long overflow can occur in some date calculations if gaps are too large, so we limit to a million years BC & AD.
-  private static final long MIN_DATE_EPOCH_MILLIS = LocalDateTime.parse("-1000000-01-01T00:00:00").toInstant(ZoneOffset.ofHours(0)).toEpochMilli();
-  private static final long MAX_DATE_EPOCH_MILLIS = LocalDateTime.parse("+1000000-01-01T00:00:00").toInstant(ZoneOffset.ofHours(0)).toEpochMilli();
+	String field_str = new String("ip_address_str");
+	String field_bin = new String("ip_address_bin");
 
-  private static final String[] FIELD_SUFFIXES = new String[] {
-      "", "_dv", "_mv", "_mv_dv", "_ni", "_ni_dv", "_ni_dv_ns", "_ni_dv_ns_mv", 
-      "_ni_mv", "_ni_mv_dv", "_ni_ns", "_ni_ns_mv", "_dv_ns", "_ni_ns_dv", "_dv_ns_mv",
-      "_smf", "_dv_smf", "_mv_smf", "_mv_dv_smf", "_ni_dv_smf", "_ni_mv_dv_smf",
-      "_sml", "_dv_sml", "_mv_sml", "_mv_dv_sml", "_ni_dv_sml", "_ni_mv_dv_sml"
-  };
+	@SuppressWarnings("unchecked")
+	@BeforeClass
+	public static void beforeClass() throws Exception {
+		// This testing approach means no schema file or per-test temp solr-home!
+		System.setProperty("managed.schema.mutable", "true");
+		System.setProperty("managed.schema.resourceName", "schema-inetaddress.xml");
+		//System.setProperty("enable.update.log", "false");
+		//System.setProperty("documentCache.enabled", "true");
+		//System.setProperty("enableLazyFieldLoading", "true");
 
-  @SuppressWarnings("unchecked")
-  @BeforeClass
-  public static void beforeClass() throws Exception {
-    // This testing approach means no schema file or per-test temp solr-home!
-    System.setProperty("managed.schema.mutable", "true");
-    System.setProperty("managed.schema.resourceName", "schema-inetaddress.xml");
-    //System.setProperty("enable.update.log", "false");
-    //System.setProperty("documentCache.enabled", "true");
-    //System.setProperty("enableLazyFieldLoading", "true");
+		initCore("solrconfig-managed-schema.xml", "ignoredSchemaName");
 
-    initCore("solrconfig-managed-schema.xml", "ignoredSchemaName");
+		// TODO SOLR-10229 will make this easier
+		boolean PERSIST_FALSE = false; // don't write to test resource dir
+		IndexSchema schema = h.getCore().getLatestSchema();
+		schema = schema.addFieldTypes(
+				Arrays.asList(
+						schema.newFieldType("ip_address_str", "eu.horizon42.InetAddressType",map(
+								"name", "ip_address_str",
+								"class","eu.horizon42.InetAddressType",
+								"docValues", "true",
+								"indexed", "true",
+								"stored", "true",
+								"multiValued", "false"
+								// "storedDocValue", "string" // string by default
+								)),
+						schema.newFieldType("ip_address_bin", "eu.horizon42.InetAddressType",map(
+								"name", "ip_address_bin",
+								"class","eu.horizon42.InetAddressType",
+								"docValues", "true",
+								"indexed", "true",
+								"stored", "true",
+								"multiValued", "false",
+								"storedDocValue", "binary"
+								))
+						),PERSIST_FALSE);
 
-    // TODO SOLR-10229 will make this easier
-    boolean PERSIST_FALSE = false; // don't write to test resource dir
-    IndexSchema schema = h.getCore().getLatestSchema();
-    schema = schema.addFieldTypes(
-    		Arrays.asList(
-    				schema.newFieldType("ip_address_str", "eu.horizon42.InetAddressType",map(
-    						"name", "ip_address_str",
-    						"class","eu.horizon42.InetAddressType",
-    						"docValues", "true",
-    						"indexed", "true",
-    						"stored", "true",
-    						"multiValued", "false"
-    						// "storedDocValue", "string" // string by default
-						)),
-    				schema.newFieldType("ip_address_bin", "eu.horizon42.InetAddressType",map(
-    						"name", "ip_address_bin",
-    						"class","eu.horizon42.InetAddressType",
-    						"docValues", "true",
-    						"indexed", "true",
-    						"stored", "true",
-    						"multiValued", "false",
-    						"storedDocValue", "binary"
-						))
-			),PERSIST_FALSE);
-    
-    schema = schema.addFields(
-    		Arrays.asList(
-    				schema.newField("ip_address_str", "ip_address_str", map()),
-    				schema.newField("ip_address_bin", "ip_address_bin", map())
-			),
-    		Collections.emptyMap(),
-    		PERSIST_FALSE);
+		schema = schema.addFields(
+				Arrays.asList(
+						schema.newField("ip_address_str", "ip_address_str", map()),
+						schema.newField("ip_address_bin", "ip_address_bin", map())
+						),
+				Collections.emptyMap(),
+				PERSIST_FALSE);
 
-    h.getCore().setLatestSchema(schema);
-    //initCore("solrconfig.xml","schema-inetaddress.xml");
-  }
-  
-  @Override
-  @After
-  public void tearDown() throws Exception {
-    clearIndex();
-    assertU(commit());
-    super.tearDown();
-  }
-  
-  @Test
-  public void testInetAddressExactQuery() throws Exception {
-  	String field_str = new String("ip_address_str");
-  	String field_bin = new String("ip_address_bin");
-    assertTrue(h.getCore().getLatestSchema().getField(field_str).hasDocValues());
-    assertTrue(h.getCore().getLatestSchema().getField(field_str).getType() instanceof PointField);
-    assertTrue(h.getCore().getLatestSchema().getField(field_bin).hasDocValues());
-    assertTrue(h.getCore().getLatestSchema().getField(field_bin).getType() instanceof PointField);
+		h.getCore().setLatestSchema(schema);
+		//initCore("solrconfig.xml","schema-inetaddress.xml");
+	}
 
-    ArrayList<InetAddress> addrs = new ArrayList<InetAddress>();
-	    for (int i = 1; i <= 10; i++) {
-	        addrs.add(InetAddress.getByName("192.168.1." + Integer.toString(i)));
-	        
-	      }
-    for (int idx=0; idx < addrs.size(); idx++) {
-		String ipaddress = addrs.get(idx).getHostAddress();
-		String docs = adoc("id", String.valueOf(idx), field_str, ipaddress, field_bin, ipaddress);
-    	assertU("Inserting document id " + Integer.toString(idx), docs);
-    }
-    assertU("commit",commit());
-    
-    String function = "field(" + field_str + ",min)";
-    // We cannot render (fl=) a field with binary docValues. use string docValues instead
-    try {
-    	SolrQueryRequest query = req("q", "*:*", "fl", "id," + field_str);
-        System.out.println("QUERY1:" + query);
-        //System.out.println("RESPONSE:" + h.query(query));
-        assertQ("numFound", query, 
-                "//*[@numFound='10']");
-    }
-    catch (AssertionError ex) {
-      System.out.println("got a AssertionError somewhere:" + ex);
-      ex.printStackTrace();
-      throw(ex);
-    }
-    // If we sort using binary docValues, order will be correct: 192.168.1.10 comes last
-    {
-    	SolrQueryRequest query = req("q", "*:*", "fl", "id," + field_str, "sort", field_bin + " asc");
-        System.out.println("QUERY2:" + query);
-        //System.out.println("RESPONSE:" + h.query(query));
-        assertQ("numFound", query, 
-                "//*[@numFound='10']",
-                "//result/doc[1]/str[@name='ip_address_str'][.='192.168.1.1']",
-                "//result/doc[2]/str[@name='ip_address_str'][.='192.168.1.2']",
-                "//result/doc[10]/str[@name='ip_address_str'][.='192.168.1.10']"
-        		);
-    }
-    // If we sort using string docValues, order will be incorrect: 192.168.1.10 comes before 192.168.1.2
-    {
-    	SolrQueryRequest query = req("q", "*:*", "fl", "id," + field_str, "sort", field_str + " asc");
-        System.out.println("QUERY2:" + query);
-        System.out.println("RESPONSE:" + h.query(query));
-        assertQ("numFound", query, 
-                "//*[@numFound='10']",
-                "//result/doc[1]/str[@name='ip_address_str'][.='192.168.1.1']",
-                "//result/doc[2]/str[@name='ip_address_str'][.='192.168.1.10']",
-                "//result/doc[3]/str[@name='ip_address_str'][.='192.168.1.2']"
-        		);
-    }
-  }
+	@Override
+	@After
+	public void tearDown() throws Exception {
+		clearIndex();
+		assertU(commit());
+		super.tearDown();
+	}
+
+	private void addDocuments() {
+		ArrayList<InetAddress> addrs = new ArrayList<InetAddress>();
+		for (int i = 1; i <= 10; i++) {
+			String ipAddress = "192.168.1." + Integer.toString(i);
+			try {
+				addrs.add(InetAddress.getByName(ipAddress));
+			}
+			catch (java.net.UnknownHostException ex) {
+				fail("Got and Unknwn host exception when inserting : " + ipAddress);
+			}
+		}
+		for (int idx=0; idx < addrs.size(); idx++) {
+			String ipaddress = addrs.get(idx).getHostAddress();
+			String docs = adoc("id", String.valueOf(idx), field_str, ipaddress, field_bin, ipaddress);
+			assertU("Inserting document id " + Integer.toString(idx), docs);
+		}
+		assertU("commit",commit());
+	}
+
+	@Test
+	public void testFieldType() throws Exception {
+		assertTrue(h.getCore().getLatestSchema().getField(field_str).hasDocValues());
+		assertTrue(h.getCore().getLatestSchema().getField(field_str).getType() instanceof PointField);
+		assertTrue(h.getCore().getLatestSchema().getField(field_bin).hasDocValues());
+		assertTrue(h.getCore().getLatestSchema().getField(field_bin).getType() instanceof PointField);
+	}
+
+	@Test
+	public void testInetAddressExactQuery() throws Exception {
+		addDocuments();
+
+		String function = "field(" + field_str + ",min)";
+		// We cannot render (fl=) a field with binary docValues. use string docValues instead
+		try {
+			SolrQueryRequest query = req("q", "*:*", "fl", "id," + field_str);
+			assertQ("numFound", query, 
+					"//*[@numFound='10']");
+		}
+		catch (AssertionError ex) {
+			System.out.println("got a AssertionError somewhere:" + ex);
+			ex.printStackTrace();
+			throw(ex);
+		}
+	}
+
+	@Test
+	public void testSortBinaryValues() throws Exception {
+		addDocuments();
+		// If we sort using binary docValues, order will be correct: 192.168.1.10 comes last
+		{
+			SolrQueryRequest query = req("q", "*:*", "fl", "id," + field_str, "sort", field_bin + " asc");
+			assertQ("numFound", query, 
+					"//*[@numFound='10']",
+					"//result/doc[1]/str[@name='ip_address_str'][.='192.168.1.1']",
+					"//result/doc[2]/str[@name='ip_address_str'][.='192.168.1.2']",
+					"//result/doc[10]/str[@name='ip_address_str'][.='192.168.1.10']"
+					);
+		}
+	}
+
+	@Test
+	public void testSortStringValues() throws Exception {
+		addDocuments();
+		// If we sort using string docValues, order will be incorrect: 192.168.1.10 comes before 192.168.1.2
+		{
+			SolrQueryRequest query = req("q", "*:*", "fl", "id," + field_str, "sort", field_str + " asc");
+			assertQ("numFound", query,
+					"//*[@numFound='10']",
+					"//result/doc[1]/str[@name='ip_address_str'][.='192.168.1.1']",
+					"//result/doc[2]/str[@name='ip_address_str'][.='192.168.1.10']",
+					"//result/doc[3]/str[@name='ip_address_str'][.='192.168.1.2']"
+					);
+		}
+	}
+
+	@Test
+	public void testRetrieveBinaryDocValue() throws Exception {
+		addDocuments();
+		// This should crash - because we ask to render a binary docValue and ByteArray.toString will be unhappy
+		{
+			try {
+				SolrQueryRequest query = req("q", "*:*", "fl", "id," + field_bin, "sort", field_bin + " asc");
+				fail("Retrieving binary docValues shouldn't work because ByteArray.toString will be unhappy");
+			}
+			catch (AssertionError e) {
+			}	
+		}
+
+	}
 }
