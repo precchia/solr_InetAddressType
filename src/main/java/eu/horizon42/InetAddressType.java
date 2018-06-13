@@ -53,15 +53,13 @@ public class InetAddressType extends PointField {
 
 	/* (non-Javadoc)
 	 * @see org.apache.solr.schema.PrimitiveFieldType#init(org.apache.solr.schema.IndexSchema, java.util.Map)
-	 * 
-	 * TODO: Verify if args to be accepted need to be personalized
 	 */
 	@Override
 	protected void init(IndexSchema schema, Map<String, String> args) {
 	    log.debug("init:" + schema + "; args:" + args);
 		super.init(schema, args);
 		String p = args.remove("storedDocValue");
-    	// By default, store ad Binary
+    	// default:
     	dvType = dvTypeEnum.STRING;
 	    if (p != null) {
 	    	if ("binary".equals(p)) {
@@ -111,7 +109,7 @@ public class InetAddressType extends PointField {
 	}
 	/*
 	 * returns the docValues field for InetAddressType.
-	 * docValus will be Of type:
+	 * docValues will be of type:
 	 *  - SORTED_SET if field is multiValued
 	 *  - SORTED if field is not multivalued
 	 *  - docValue will contain bytesRef for InetAddress representation.
@@ -172,7 +170,7 @@ public class InetAddressType extends PointField {
 
 	/* (non-Javadoc)
 	 * @see org.apache.solr.schema.FieldType#getUninversionType(org.apache.solr.schema.SchemaField)
-	 * This is basically the type we return as docValues Type
+	 * This is the type we return as docValues Type
 	 */
 	  @Override
 	  public Type getUninversionType(SchemaField sf) {
@@ -190,12 +188,15 @@ public class InetAddressType extends PointField {
 	 * Called to write back value for stored field. Value is the StoredField with bytes[] corresponding to the InetAddress.
 	 */
 	public void write(TextResponseWriter writer, String name, IndexableField f) throws IOException {
+		log.debug("write to " + writer + ": " + name + "=" + f);
+
 		writer.writeStr(name, InetAddressPoint.decode(f.binaryValue().bytes).getHostAddress(), true);
 	}
 
 	// **********************************************************************************
 	// Conversion functions
 	// **********************************************************************************
+	
 	/* (non-Javadoc)
 	 * @see org.apache.solr.schema.FieldType#toNativeType(java.lang.Object)
 	 * Converts from input type to type native to our fieldType
@@ -251,6 +252,7 @@ public class InetAddressType extends PointField {
 		 */
 		@Override
 		public String toExternal(IndexableField f) {
+			log.debug("toExternal: " + f);
 			return InetAddressPoint.decode(f.binaryValue().bytes).getHostAddress();
 		}
 
@@ -294,17 +296,12 @@ public class InetAddressType extends PointField {
 	@Override
 	public Query getPrefixQuery(QParser parser, SchemaField field, String termStr) {
 	    log.error("Not implemented yet PrefixQuery for termStr:" + termStr);
-		// TODO Auto-generated method stub
-	    
 		return super.getPrefixQuery(parser, field, termStr);
 	}
 
 	/* (non-Javadoc)
 	 * @see org.apache.solr.schema.FieldType#getRangeQuery(org.apache.solr.search.QParser, org.apache.solr.schema.SchemaField, java.lang.String, java.lang.String, boolean, boolean)
-	 * a Rangequery is a query like: src_address:[192.168.1.1 TO 192.168.1.10]
-	 * Use a square bracket [ or ] to include the corresponding boundary
-	 * Use a parenthesis to exclude it
-	 * If query is like: (192.168.1.1 TO 192.168.1.10) then 192.168.1.1 and 192.168.1.10 will be excluded
+	 * a RangeQuery is a query like: src_address:[192.168.1.1 TO 192.168.1.10] or (192.168.1.1 TO 192.168.1.10)
 	 */
 	@Override
 	public Query getRangeQuery(QParser parser, SchemaField field, String part1, String part2, boolean minInclusive,
@@ -350,9 +347,8 @@ public class InetAddressType extends PointField {
 	/*
 	 * (non-Javadoc)
 	 * @see org.apache.solr.schema.PointField#getExactQuery(org.apache.solr.schema.SchemaField, java.lang.String)
-	 * We need to override this method because we inherit from PointField. But since we rewrite completely getFieldQuery
-	 * We should never be called
-	 * That is a side-effect of inheriting from PointField
+	 * We need to override this method because we inherit from PointField. That is a side-effect of inheriting from PointField
+	 * But since we rewrite completely getFieldQuery We should never be called
 	 */
 	@Override
 	protected Query getExactQuery(SchemaField field, String externalVal) {
@@ -363,9 +359,8 @@ public class InetAddressType extends PointField {
 	/*
 	 * (non-Javadoc)
 	 * @see org.apache.solr.schema.PointField#getPointRangeQuery(org.apache.solr.search.QParser, org.apache.solr.schema.SchemaField, java.lang.String, java.lang.String, boolean, boolean)
-	 * We need to override this but since we completely reqrite getFieldQuery and getRangeQuery,
-	 * we sould nevver be called
-	 * That is a side-effect of inheriting from PointField
+	 * We need to override this method because we inherit from PointField. That is a side-effect of inheriting from PointField
+	 * But since we rewrite completely getFieldQuery We should never be called
 	 */
 	@Override
 	public Query getPointRangeQuery(QParser parser, SchemaField field, String min, String max, boolean minInclusive,
