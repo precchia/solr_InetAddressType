@@ -22,7 +22,7 @@ A field can be indexed, stored or generate docValues (i.e. stored="true" indexed
 There is no way to do range-based faceting. That is due to how solr and range faceting is currently implemented, 
 
 This field Type has been tested on solr 7.1.0
-It should work on previous versions also. But has not been tested yet;
+It should work on previous versions also, with trivial changes. But has not been tested yet;
 
 # Usage
 ### build jar
